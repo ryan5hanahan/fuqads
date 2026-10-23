@@ -15,10 +15,16 @@ import SafariServices
 ///     "site": "example.com",
 ///     "state": "trusted" | "default" | "strict" | "untrusted",
 ///     "allowOrigins": ["cdn.example.net"] }
-///     Persist per-site policy (FR-10). The trusted state also re-runs the
-///     allowlist recompile so the content blockers pick it up (< 5 s,
-///     NFR-3); async; respond immediately.
+///     Persist per-site policy (FR-10). The policy is written synchronously
+///     so it is durable when this reply returns; the trusted state also
+///     re-runs the allowlist recompile so the content blockers pick it up
+///     (< 5 s, NFR-3) — that part is async.
 ///
+///   { "type": "etldPlusOne", "host": "www.example.co.uk" }
+///     eTLD+1 of a hostname via the shared PublicSuffixList dependency;
+///     the raw host is returned for unkeyable hosts (IPs, localhost).
+///     The popup uses this to key per-site state (FR-10).
+///     Responds synchronously.
 ///   { "type": "getState" }      policy, list info, and update state;
 ///     respond synchronously.
 ///
@@ -64,14 +70,20 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 return
             }
             let allowOrigins = (message?["allowOrigins"] as? [String]) ?? []
+            // Synchronous: the policy must be durable when the reply
+            // returns (the popup then polls for the optional recompile).
+            Self.store.setPolicy(SitePolicy(state: state, allowOrigins: allowOrigins), for: site)
             let recompile = state == .trusted
-            Task {
-                Self.store.setPolicy(SitePolicy(state: state, allowOrigins: allowOrigins), for: site)
-                if recompile {
+            if recompile {
+                Task {
                     await Self.engine.refreshAllowlist()
                 }
             }
             Self.respond(context, ["ok": true, "async": recompile])
+
+        case "etldPlusOne":
+            let host = (message?["host"] as? String) ?? ""
+            Self.respond(context, ["ok": true, "etldPlusOne": eTLDPlusOne(host) ?? host])
 
         case "getState":
             Self.respond(context, Self.statePayload())

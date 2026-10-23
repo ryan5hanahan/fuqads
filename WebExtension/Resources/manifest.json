@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "bl0cksh1t",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Scheduled filter list updates and per-site script policy (NoScript half).",
   "minimum_system_requirements": {
     "macOS": "14.0"
@@ -10,6 +10,18 @@
     "service_worker": "background.js"
   },
   "permissions": [
-    "alarms"
+    "alarms",
+    "declarativeNetRequest",
+    "tabs"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
   ]
 }

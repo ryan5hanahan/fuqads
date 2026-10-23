@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <span id="site" class="site">…</span>
+    <span id="effective" class="eff"></span>
+  </header>
+
+  <div id="stateSwitch" class="switch" role="group" aria-label="Site state">
+    <button type="button" data-state="trusted">Trusted</button>
+    <button type="button" data-state="default">Default</button>
+    <button type="button" data-state="strict">Strict</button>
+    <button type="button" data-state="untrusted">Untrusted</button>
+  </div>
+
+  <p id="cspNote" class="note hidden"></p>
+
+  <section id="inventorySection">
+    <h2>Third-party</h2>
+    <ul id="thirdParty" class="origins"></ul>
+    <h2>First-party</h2>
+    <ul id="firstParty" class="origins"></ul>
+    <p id="inventoryNote" class="note hidden"></p>
+  </section>
+
+  <footer>
+    <span id="status" class="status"></span>
+    <button id="reload" type="button" class="primary">Reload page</button>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -79,6 +79,35 @@ Four per-site states, stored keyed by eTLD+1:
 Global default state is configurable (Default or Strict). Strict-by-default
 is the NoScript experience.
 
+### 4.2.1 dNR rule mapping (Phase 2 implementation)
+
+Strict/Untrusted for one eTLD+1 are compiled to at most three dynamic
+rules (`WebExtension/Resources/policy.js`, pure + node-tested):
+
+| id | state | action | condition |
+|---|---|---|---|
+| base | strict, untrusted | `block` | `initiatorDomains: [site]`, `notRequestDomains: [site, …allowOrigins]`, `resourceTypes: [script, sub_frame, websocket]` |
+| base+1 | untrusted | `block` | `initiatorDomains: [site]`, `requestDomains: [site]`, `resourceTypes: [script]` |
+| base+2 | untrusted, only if `modifyHeaders` is probed OK | `modifyHeaders` — `content-security-policy: set <csp>` | `requestDomains: [site]`, `resourceTypes: [document]` |
+
+- `base` = FNV-1a(eTLD+1) mod 2^30, so the whole set is recomputed on
+  every change and applied as a diff — rules replace in place, never
+  accumulate (pending spike S2 confirms `initiatorDomains`/
+  `notRequestDomains` matching; see §8).
+- CSP value: `script-src 'none'`, or `script-src https://<each
+  allowOrigin>` when the user granted exceptions (first-party stays
+  blocked, matching the base+1 rule).
+- **Strict global default:** dNR cannot express "third-party" without a
+  concrete domain, so unvisited sites under a strict global default get
+  rules only once their top-level origin is observed (content-script
+  inventory push + `tabs` events, in-memory set capped at 200). An
+  explicit per-site policy always beats the global default.
+- **modifyHeaders probe:** one cold-start round-trip installs/removes an
+  inert `modifyHeaders` rule. On failure Untrusted degrades to base+base+1
+  (SPEC §5.5) and the panel says so.
+- Policy edits made from the host app (different process) are picked up by
+  a 30 s `getState` poll plus the tab-activation/`policyChanged` triggers.
+
 ### 4.3 Cosmetic filtering
 
 - List-derived element hiding → `css-display-none` rules in the CB shards
@@ -196,3 +225,30 @@ Decisions:
 Run via the spike app (`spikes/SpikeApp`, see spikes/README.md). Results
 fill in here when observed in Safari; S2 decides FR-14, S3 decides the
 update path (§4.1), S4 ratifies the allowlist rule shape, S5 decides FR-5.
+
+### Phase 2 verification (manual, 2026-10-23)
+
+Policy→dNR mapping is unit-tested in node (`Tests/policy.test.js`) and the
+extension builds clean; the behavioural matrix needs a signed Safari run:
+
+1. `xcodegen generate && sh Scripts/build.sh build`
+2. Serve the test pages: `python3 -m http.server -d Tests/pages 8000`
+3. In Safari: enable bl0cksh1t + all content blockers + the web extension
+   (app onboarding screen links to the settings page), then open
+   `http://127.0.0.1:8000/index.html`.
+4. `ads.html` — Phase 1 re-check: all rows BLOCKED + cosmetic box hidden;
+   set the site Trusted from the toolbar panel → auto-reload → all LOADED,
+   box visible (FR-11).
+5. `scripts.html?expect=<state>` for each of the four states after
+   switching in the panel — the verdict line must read PASS. This is the
+   FR-10..FR-16 exit matrix; it also observes S2's open questions
+   (`initiatorDomains`/`notRequestDomains` matching on the page origin,
+   `modifyHeaders` for inline scripts). Note the page origin is an IP
+   host (127.0.0.1); if initiator-domain matching fails only for IPs,
+   repeat with a hostname (e.g. `127.0.0.1 bl0cksh1t.localhost` in
+   /etc/hosts → `http://bl0cksh1t.localhost:8000`).
+6. Under Strict on scripts.html, allow `connect.facebook.net` (or
+   `googletagmanager.com`) from the panel → auto-reload → that resource
+   LOADED again, the other still BLOCKED (FR-13).
+7. Quit Safari, relaunch → states and allowances still applied (persistence
+   via the App Group).
