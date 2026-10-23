@@ -1,0 +1,13 @@
+{
+    "manifest_version": 3,
+    "name": "bl0cksh1t spike",
+    "description": "Phase 0 spikes S2/S3/S5",
+    "version": "0.0.1",
+
+    "background": {
+        "scripts": ["background.js"]
+    },
+
+    "permissions": ["alarms", "declarativeNetRequest", "tabs"],
+    "host_permissions": ["http://127.0.0.1:8642/*"]
+}

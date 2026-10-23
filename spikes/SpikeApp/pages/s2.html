@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>S2 — dNR spike</title>
+  <style>
+    body { font: 15px/1.5 system-ui; margin: 40px; }
+    table { border-collapse: collapse; }
+    td, th { border: 1px solid #999; padding: 6px 12px; text-align: left; }
+    .ok { background: #d4f7d4; }
+    .bad { background: #f7d4d4; }
+    #csp { padding: 10px; margin: 12px 0; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>S2 — declarativeNetRequest capabilities</h1>
+
+  <div id="csp">CSP state: INLINE SCRIPT BLOCKED — modifyHeaders CSP injection is in effect (rule 1 worked)</div>
+
+  <table>
+    <tr><th>test</th><th>result</th><th>expected (full support)</th></tr>
+    <tr id="row-baseline"><td>rule 5: baseline block (no conditions)</td><td>pending</td><td>fetch blocked</td></tr>
+    <tr id="row-initiator"><td>rule 2: initiatorDomains: ["127.0.0.1"]</td><td>pending</td><td>fetch blocked</td></tr>
+    <tr id="row-requestdomains"><td>rule 3: requestDomains: ["127.0.0.1"]</td><td>pending</td><td>fetch blocked</td></tr>
+    <tr id="row-domaintype"><td>rule 4: domainType: "thirdParty" (request is 1st-party)</td><td>pending</td><td>fetch NOT blocked</td></tr>
+  </table>
+
+  <p id="report-state">report: not sent</p>
+
+  <script>
+    // If the dNR CSP injection (rule 1) works, this inline script never runs
+    // and the #csp div keeps its static "BLOCKED" text.
+    document.getElementById("csp").textContent =
+      "CSP state: INLINE SCRIPT RAN — modifyHeaders CSP injection NOT in effect (rule 1 missing or ignored)";
+
+    const results = [];
+    function setRow(id, ok, detail) {
+      const row = document.getElementById(id);
+      const cell = row.cells[1];
+      cell.textContent = detail;
+      cell.parentElement.className = ok ? "ok" : "bad";
+      results.push({ name: id, ok, detail });
+    }
+
+    async function probe(url) {
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        return "http " + r.status;
+      } catch (e) {
+        return "blocked/failed: " + (e.message || e);
+      }
+    }
+
+    async function run() {
+      const baseline = await probe("/dnr-baseline.txt");
+      setRow("row-baseline", baseline.startsWith("blocked"), baseline);
+
+      const initiator = await probe("/dnr-initiator.txt");
+      setRow("row-initiator", initiator.startsWith("blocked"), initiator);
+
+      const requestdomains = await probe("/dnr-requestdomains.txt");
+      setRow("row-requestdomains", requestdomains.startsWith("blocked"), requestdomains);
+
+      const domaintype = await probe("/dnr-domaintype.txt");
+      setRow("row-domaintype", !domaintype.startsWith("blocked"), domaintype);
+
+      await post();
+    }
+
+    async function post() {
+      const body = JSON.stringify({
+        ts: new Date().toISOString(),
+        src: "s2.html",
+        inlineScriptRan: true,
+        results
+      });
+      try {
+        const r = await fetch("/report", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body
+        });
+        document.getElementById("report-state").textContent =
+          "report: sent (http " + r.status + ")";
+      } catch (e) {
+        document.getElementById("report-state").textContent =
+          "report: failed " + (e.message || e);
+      }
+    }
+
+    run().catch((e) => document.getElementById("report-state").textContent = "error: " + e);
+  </script>
+</body>
+</html>

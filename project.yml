@@ -1,0 +1,262 @@
+# bl0cksh1t main project (PLAN.md Phase 1+).
+#
+# Generate:  xcodegen
+# Build:     Scripts/build.sh   (xcodebuild + -skipPackagePluginValidation —
+#   SafariConverterLib's GenerateVersion plugin is "unknown" to this Xcode's
+#   fingerprint store and xcodebuild otherwise dies at "Validate plug-in")
+# Bundle lists into the app (FR-4):  Scripts/bundle-lists.sh
+#
+# Bundle identifiers (BlockerCore/Bundles.swift mirrors these):
+#   app              dev.bl0cksh1t
+#   content blockers dev.bl0cksh1t.{Ads,Privacy,Annoyances,User}
+#   web extension    dev.bl0cksh1t.WebExtension
+# App Group: group.dev.bl0cksh1t
+# Local dev signing: automatic + team 4MSBA69ZG3 (sandbox + App Group
+# entitlements require a provisioning profile; ad-hoc "-" does not work).
+# Release (Phase 4): override with Developer ID via xcodebuild args.
+
+name: bl0cksh1t
+options:
+  bundleIdPrefix: dev.bl0cksh1t
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+packages:
+  BlockerCore:
+    path: BlockerCore
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: 4MSBA69ZG3
+
+targets:
+  bl0cksh1t:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+      - path: App/bundled-blockers
+        buildPhase: resources
+        optional: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bl0cksh1t
+        PRODUCT_NAME: bl0cksh1t
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
+        ENABLE_USER_SELECTED_FILES: readonly
+        REGISTER_APP_GROUPS: YES
+        SWIFT_OBJC_BRIDGING_HEADER: App/SafariStateBridge.h
+    info:
+      path: App/App-Info.plist
+      properties:
+        CFBundleDisplayName: bl0cksh1t
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHumanReadableCopyright: "GPL-3.0"
+    entitlements:
+      path: App/bl0cksh1t.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.user-selected-files.read-only: true
+        com.apple.security.application-groups:
+          - group.dev.bl0cksh1t
+    dependencies:
+      - package: BlockerCore
+      - target: Ads
+      - target: Privacy
+      - target: Annoyances
+      - target: User
+      - target: WebExtension
+
+  # --- content blocker targets -------------------------------------------
+
+  Ads:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Blockers/Ads
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bl0cksh1t.Ads
+        PRODUCT_NAME: Ads
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SELECTED_FILES: readonly
+    info:
+      path: Blockers/Ads/Info.plist
+      properties:
+        CFBundleDisplayName: bl0cksh1t ads
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.content-blocker
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentBlockerRequestHandler
+        NSHumanReadableDescription: "Static ad/tracker blocking (EasyList + uBO filters)"
+    entitlements:
+      path: Blockers/Ads/Ads.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.user-selected-files.read-only: true
+        com.apple.security.application-groups:
+          - group.dev.bl0cksh1t
+    dependencies:
+      - package: BlockerCore
+
+  Privacy:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Blockers/Privacy
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bl0cksh1t.Privacy
+        PRODUCT_NAME: Privacy
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SELECTED_FILES: readonly
+    info:
+      path: Blockers/Privacy/Info.plist
+      properties:
+        CFBundleDisplayName: bl0cksh1t privacy
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.content-blocker
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentBlockerRequestHandler
+        NSHumanReadableDescription: "Tracker/privacy blocking (EasyPrivacy + Peter Lowe + uBO privacy)"
+    entitlements:
+      path: Blockers/Privacy/Privacy.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.user-selected-files.read-only: true
+        com.apple.security.application-groups:
+          - group.dev.bl0cksh1t
+    dependencies:
+      - package: BlockerCore
+
+  Annoyances:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Blockers/Annoyances
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bl0cksh1t.Annoyances
+        PRODUCT_NAME: Annoyances
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SELECTED_FILES: readonly
+    info:
+      path: Blockers/Annoyances/Info.plist
+      properties:
+        CFBundleDisplayName: bl0cksh1t annoyances
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.content-blocker
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentBlockerRequestHandler
+        NSHumanReadableDescription: "Annoyances (off by default)"
+    entitlements:
+      path: Blockers/Annoyances/Annoyances.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.user-selected-files.read-only: true
+        com.apple.security.application-groups:
+          - group.dev.bl0cksh1t
+    dependencies:
+      - package: BlockerCore
+
+  User:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: Blockers/User
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bl0cksh1t.User
+        PRODUCT_NAME: User
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SELECTED_FILES: readonly
+    info:
+      path: Blockers/User/Info.plist
+      properties:
+        CFBundleDisplayName: bl0cksh1t user
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.content-blocker
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentBlockerRequestHandler
+        NSHumanReadableDescription: "User rules and element picker results"
+    entitlements:
+      path: Blockers/User/User.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.user-selected-files.read-only: true
+        com.apple.security.application-groups:
+          - group.dev.bl0cksh1t
+    dependencies:
+      - package: BlockerCore
+
+  # --- web extension -------------------------------------------------------
+
+  WebExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: WebExtension/SafariWebExtensionHandler.swift
+      - path: WebExtension/Resources
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bl0cksh1t.WebExtension
+        PRODUCT_NAME: WebExtension
+        ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_USER_SELECTED_FILES: readonly
+        OTHER_LDFLAGS: -framework SafariServices
+    info:
+      path: WebExtension/WebExtension-Info.plist
+      properties:
+        CFBundleDisplayName: bl0cksh1t
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
+        NSHumanReadableDescription: "Per-site script policy (NoScript half) and list updates"
+    entitlements:
+      path: WebExtension/WebExtension.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.user-selected-files.read-only: true
+        com.apple.security.application-groups:
+          - group.dev.bl0cksh1t
+    dependencies:
+      - package: BlockerCore
+
+schemes:
+  bl0cksh1t:
+    build:
+      targets:
+        bl0cksh1t: all
+        Ads: all
+        Privacy: all
+        Annoyances: all
+        User: all
+        WebExtension: all
+    test:
+      targets:
+        - package: BlockerCore/BlockerCoreTests
+    run:
+      config: Release

@@ -1,0 +1,42 @@
+{
+  "originHash" : "95be13943cf3e34c35be49b08c2c8ffadf5cff992d34c20deaf539e7d43c8944",
+  "pins" : [
+    {
+      "identity" : "punycodeswift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/gumob/PunycodeSwift.git",
+      "state" : {
+        "revision" : "30a462bdb4398ea835a3585472229e0d74b36ba5",
+        "version" : "3.0.0"
+      }
+    },
+    {
+      "identity" : "safariconverterlib",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AdguardTeam/SafariConverterLib.git",
+      "state" : {
+        "revision" : "1cfdcaf042880a5e0027a8fc6f7ebf9ee667acc9",
+        "version" : "4.3.1"
+      }
+    },
+    {
+      "identity" : "swift-argument-parser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-argument-parser",
+      "state" : {
+        "revision" : "41982a3656a71c768319979febd796c6fd111d5c",
+        "version" : "1.5.0"
+      }
+    },
+    {
+      "identity" : "swift-psl",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ameshkov/swift-psl",
+      "state" : {
+        "revision" : "3817207a077544eae30a0eed1d640079b55c8090",
+        "version" : "1.1.187"
+      }
+    }
+  ],
+  "version" : 3
+}

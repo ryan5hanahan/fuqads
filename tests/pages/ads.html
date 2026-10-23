@@ -1,0 +1,118 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ads — network + cosmetic blocking</title>
+  <style>
+    body { font: 15px/1.5 system-ui; margin: 40px; }
+    table { border-collapse: collapse; margin: 16px 0; }
+    td, th { border: 1px solid #aaa; padding: 8px 12px; }
+    th { text-align: left; }
+    .ok   { color: #0a0; font-weight: 700; }
+    .bad  { color: #c00; font-weight: 700; }
+    .pending { color: #888; }
+    #bl0cksh1t-cosmetic-box {
+      background: #0a0; color: #fff; padding: 12px; margin: 16px 0; font-weight: 600;
+    }
+    img { display: block; }
+  </style>
+</head>
+<body>
+  <h1>Network + cosmetic blocking</h1>
+  <p>
+    Each row embeds an image from a domain covered by one enabled list.
+    With bl0cksh1t active, every row must read <span class="ok">BLOCKED</span>
+    (the request never reaches the network) and the green cosmetic box below
+    the table must be <b>hidden</b> by the user rule
+    <code>###bl0cksh1t-cosmetic-box</code>.
+  </p>
+  <p>
+    Then set this site to <b>Trusted</b> (allowlist) and reload:
+    every row must read <span class="bad">LOADED</span> and the cosmetic box
+    must become <b>visible</b> (FR-11: trusted disables all blocking).
+  </p>
+
+  <table>
+    <tr><th>#</th><th>request</th><th>covering list (shard)</th><th>status</th></tr>
+    <tr>
+      <td>1</td>
+      <td><img class="probe" id="p1" src="http://doubleclick.net/ddm/adx/n/track.gif" width="16" height="16" alt="[blocked]"></td>
+      <td>Peter Lowe (privacy)</td>
+      <td class="pending" id="s1">waiting…</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td><img class="probe" id="p2" src="http://adadvisor.net/track.gif" width="16" height="16" alt="[blocked]"></td>
+      <td>EasyList (ads)</td>
+      <td class="pending" id="s2">waiting…</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td><img class="probe" id="p3" src="http://googleadservices.com/pagead/conversion/123456/" width="16" height="16" alt="[blocked]"></td>
+      <td>EasyPrivacy (privacy)</td>
+      <td class="pending" id="s3">waiting…</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><img class="probe" id="p4" src="http://flexytalk.net/ad.gif" width="16" height="16" alt="[blocked]"></td>
+      <td>uBO badware (privacy)</td>
+      <td class="pending" id="s4">waiting…</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><img class="probe" id="p5" src="http://clivads.com/serving/ad.gif" width="16" height="16" alt="[blocked]"></td>
+      <td>uBO filters (ads)</td>
+      <td class="pending" id="s5">waiting…</td>
+    </tr>
+  </table>
+
+  <div id="bl0cksh1t-cosmetic-box">
+    COSMETIC BOX — hidden while blocking is active (user rule, User shard)
+  </div>
+
+  <p id="verdict" class="pending">verdict: evaluating…</p>
+
+  <script>
+    // Self-report. An <img> whose request a content blocker kills fires
+    // `error` (or simply never loads); one that loads has naturalWidth > 0.
+    const SETTLE_MS = 2500; // give slow-but-allowed loads a chance
+    const probes = [1, 2, 3, 4, 5];
+    function statusOf(id) {
+      const img = document.getElementById("p" + id);
+      if (img.complete && img.naturalWidth > 0) return "LOADED";
+      return "BLOCKED";
+    }
+    function render() {
+      let allBlocked = true;
+      for (const id of probes) {
+        const cell = document.getElementById("s" + id);
+        const s = statusOf(id);
+        cell.textContent = s;
+        cell.className = s === "BLOCKED" ? "ok" : "bad";
+        if (s !== "BLOCKED") allBlocked = false;
+      }
+      const boxVisible = document.getElementById("bl0cksh1t-cosmetic-box").offsetParent !== null;
+      const verdict = document.getElementById("verdict");
+      const expectedBlocked = new URLSearchParams(location.search).get("expect") !== "trusted";
+      const pass = expectedBlocked
+        ? (allBlocked && !boxVisible)
+        : (!allBlocked && boxVisible);
+      verdict.textContent = "verdict: " + (pass
+        ? (expectedBlocked ? "PASS — all ad requests blocked, cosmetic box hidden"
+                           : "PASS — trusted site: all requests allowed, cosmetic box visible")
+        : "MISMATCH — expected " + (expectedBlocked ? "all blocked + box hidden" : "all loaded + box visible")
+        + "; observed blocked=" + allBlocked + " boxVisible=" + boxVisible);
+      verdict.className = pass ? "ok" : "bad";
+    }
+    // Report as soon as all probes have settled (loaded or failed),
+    // or after the settle window (unblocked requests that never finish).
+    let settled = 0;
+    for (const id of probes) {
+      const img = document.getElementById("p" + id);
+      img.addEventListener("load", () => { settled++; if (settled === probes.length) render(); });
+      img.addEventListener("error", () => { settled++; if (settled === probes.length) render(); });
+    }
+    setTimeout(render, SETTLE_MS);
+  </script>
+</body>
+</html>

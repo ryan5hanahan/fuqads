@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>scripts — site-state matrix</title>
+  <style>
+    body { font: 15px/1.5 system-ui; margin: 40px; }
+    table { border-collapse: collapse; margin: 16px 0; }
+    td, th { border: 1px solid #aaa; padding: 8px 12px; }
+    th { text-align: left; }
+    .ok  { color: #0a0; font-weight: 700; }
+    .bad { color: #c00; font-weight: 700; }
+    .pending { color: #888; }
+    iframe { width: 120px; height: 60px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>Script / frame inventory (site-state matrix)</h1>
+  <p>
+    Expected outcomes per site state (dNR dynamic rules, Phase 2):
+  </p>
+  <table>
+    <tr><th>resource</th><th>trusted</th><th>default</th><th>strict</th><th>untrusted</th></tr>
+    <tr><td>inline script</td><td>runs</td><td>runs</td><td>runs</td><td>blocked (CSP)</td></tr>
+    <tr><td>1st-party script (127.0.0.1)</td><td>loaded</td><td>loaded</td><td>loaded</td><td>blocked</td></tr>
+    <tr><td>3rd-party script (facebook)</td><td>loaded</td><td>loaded</td><td>blocked</td><td>blocked</td></tr>
+    <tr><td>3rd-party iframe (googletagmanager)</td><td>loaded</td><td>loaded</td><td>blocked</td><td>blocked</td></tr>
+  </table>
+
+  <p>
+    Usage: open <code>scripts.html?expect=trusted|default|strict|untrusted</code>
+    after switching the site state in the bl0cksh1t panel. The verdict line
+    compares observed results against the expected column.
+  </p>
+
+  <table id="observed">
+    <tr><th>resource</th><th>observed</th></tr>
+    <tr><td>inline script</td><td class="pending" id="o-inline">…</td></tr>
+    <tr><td>1st-party script (127.0.0.1/fp.js)</td><td class="pending" id="o-fp">…</td></tr>
+    <tr><td>3rd-party script (connect.facebook.net)</td><td class="pending" id="o-3p">…</td></tr>
+    <tr><td>3rd-party iframe (googletagmanager.com)</td><td class="pending" id="o-frame">…</td></tr>
+  </table>
+
+  <p id="verdict" class="pending">verdict: evaluating…</p>
+
+  <script>
+    window.__inlineOK = true; // proves the inline script ran (CSP test, untrusted)
+  </script>
+  <script src="/fp.js"></script>
+  <script src="https://connect.facebook.net/en_US/fbevents.js"></script>
+  <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-000000" title="tag manager"></iframe>
+
+  <script>
+    const SETTLE_MS = 2500;
+    const external = [
+      { id: "fp",  src: "/fp.js", cell: "o-fp" },
+      { id: "3p",  src: "https://connect.facebook.net/en_US/fbevents.js", cell: "o-3p" },
+    ];
+    const failed = new Set();
+    const loaded = new Set();
+    window.addEventListener("error", (e) => {
+      const t = e.target;
+      if (t && t.tagName === "SCRIPT" && t.src) {
+        for (const r of external) if (r.src === t.src || t.src.endsWith(r.src)) failed.add(r.id);
+      }
+    }, true);
+    for (const r of external) {
+      // Poll the DOM script element's readiness state.
+      const el = [...document.scripts].find(s => s.src.endsWith(r.src));
+      if (el) el.addEventListener("load", () => loaded.add(r.id));
+    }
+    const frame = document.querySelector("iframe");
+    let frameLoaded = false, frameFailed = false;
+    frame.addEventListener("load", () => { frameLoaded = true; });
+    frame.addEventListener("error", () => { frameFailed = true; });
+
+    function classify(set, loadedSet, failedSet) {
+      if (failedSet.has(set)) return "BLOCKED";
+      if (loadedSet.has(set)) return "LOADED";
+      return "UNKNOWN";
+    }
+    function render() {
+      const rows = {
+        "o-inline": (window.__inlineOK ? "RAN" : "BLOCKED"),
+        "o-fp":  classify("fp", loaded, failed),
+        "o-3p":  classify("3p", loaded, failed),
+        "o-frame": frameLoaded ? "LOADED" : (frameFailed ? "BLOCKED" : "UNKNOWN"),
+      };
+      for (const [cell, v] of Object.entries(rows)) {
+        const el = document.getElementById(cell);
+        el.textContent = v;
+        el.className = (v === "BLOCKED") ? "bad" : (v === "UNKNOWN" ? "pending" : "ok");
+      }
+      const expected = new URLSearchParams(location.search).get("expect") || "default";
+      const expectMap = {
+        trusted:  { "o-inline": "RAN",     "o-fp": "LOADED", "o-3p": "LOADED", "o-frame": "LOADED" },
+        default:  { "o-inline": "RAN",     "o-fp": "LOADED", "o-3p": "LOADED", "o-frame": "LOADED" },
+        strict:   { "o-inline": "RAN",     "o-fp": "LOADED", "o-3p": "BLOCKED", "o-frame": "BLOCKED" },
+        untrusted:{ "o-inline": "BLOCKED", "o-fp": "BLOCKED", "o-3p": "BLOCKED", "o-frame": "BLOCKED" },
+      };
+      const exp = expectMap[expected] || expectMap.default;
+      const mismatches = Object.entries(exp)
+        .filter(([k, v]) => rows[k] !== v)
+        .map(([k, v]) => `${k}: expected ${v}, got ${rows[k]}`);
+      const verdict = document.getElementById("verdict");
+      verdict.textContent = "verdict [" + expected + "]: " + (
+        mismatches.length
+          ? "MISMATCH — " + mismatches.join("; ")
+          : "PASS — observed state matches the '" + expected + "' column");
+      verdict.className = mismatches.length ? "bad" : "ok";
+    }
+    setTimeout(render, SETTLE_MS);
+  </script>
+</body>
+</html>

@@ -1,0 +1,116 @@
+# Phase 0 spike app (PLAN.md Phase 0, S2-S5). Throwaway: answers
+#   S2  dNR modifyHeaders / initiatorDomains / requestDomains / domainType
+#   S3  CB reload from the web extension's native handler + 150k reload latency
+#   S4  ignore-previous-rules + if-top-url allowlist (network + cosmetic)
+#   S5  browser.alarms in non-persistent background while the app is closed
+#
+# Generate data + project, then build:
+#   python3 Scripts/gen-spike-data.py
+#   xcodegen
+#   xcodebuild -project Spike.xcodeproj -scheme Spike -configuration Release build
+#
+# Local-dev signing: ad-hoc, no team, no sandbox (sandbox entitlements
+# require a development provisioning profile). NFR-9 is verified on the
+# Phase 1 project.
+
+name: Spike
+options:
+  bundleIdPrefix: dev.bl0cksh1t
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+
+targets:
+  Spike:
+    type: application
+    platform: macOS
+    sources:
+      - path: Spike
+      - path: pages
+        type: folder
+      - path: Spike/spike-data
+        type: folder
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bl0cksh1t.spike
+        PRODUCT_NAME: Spike
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_OUTGOING_NETWORK_CONNECTIONS: YES
+        REGISTER_APP_GROUPS: YES
+    info:
+      path: Spike/Spike-Info.plist
+      properties:
+        CFBundleDisplayName: bl0cksh1t spike
+        CFBundleShortVersionString: "0.0.1"
+        CFBundleVersion: "1"
+    dependencies:
+      - target: SpikeWE
+      - target: SpikeCB
+
+  SpikeWE:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: WebExtension/SafariWebExtensionHandler.swift
+      - path: WebExtension/Resources
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bl0cksh1t.spike.we
+        PRODUCT_NAME: SpikeWE
+        ENABLE_HARDENED_RUNTIME: YES
+        OTHER_LDFLAGS: -framework SafariServices
+    info:
+      path: WebExtension/SpikeWE-Info.plist
+      properties:
+        CFBundleDisplayName: bl0cksh1t spike (web)
+        CFBundleShortVersionString: "0.0.1"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
+        NSHumanReadableDescription: "Native handler for the bl0cksh1t spike web extension"
+    # No entitlements: ad-hoc spike build; logs go to the fixed App Group
+    # container path (handlers create the directory on demand).
+
+  SpikeCB:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: ContentBlocker/ContentBlockerRequestHandler.swift
+      - path: ContentBlocker/blockerList.json
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.bl0cksh1t.spike.cb
+        PRODUCT_NAME: SpikeCB
+        ENABLE_HARDENED_RUNTIME: YES
+        OTHER_LDFLAGS: -framework SafariServices
+    info:
+      path: ContentBlocker/SpikeCB-Info.plist
+      properties:
+        CFBundleDisplayName: bl0cksh1t spike (cb)
+        CFBundleShortVersionString: "0.0.1"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.content-blocker
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ContentBlockerRequestHandler
+        NSHumanReadableDescription: "Spike content blocker (S3 reload, S4 allowlist)"
+
+schemes:
+  Spike:
+    build:
+      targets:
+        Spike: all
+        SpikeWE: all
+        SpikeCB: all
+    run:
+      config: Release

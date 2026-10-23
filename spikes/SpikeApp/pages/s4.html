@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>S4 — allowlist spike</title>
+  <style>
+    body { font: 15px/1.5 system-ui; margin: 40px; }
+    #cosmetic-test { background: #0a0; padding: 12px; margin: 16px 0; font-weight: 600; }
+    .ad-box { display: inline-block; vertical-align: middle; margin-right: 10px; }
+    img { image-rendering: pixelated; }
+  </style>
+</head>
+<body>
+  <h1>S4 — allowlist via ignore-previous-rules + if-top-url</h1>
+  <p>
+    In the spike app: <b>block mode</b> → the red ad pixel is blocked and the
+    green cosmetic box is hidden.<br>
+    <b>Allow mode</b> → both visible. Then reload this page after each toggle.
+  </p>
+
+  <p>
+    <span class="ad-box">
+      <img id="ad" src="/ad.png" width="60" height="12" alt="[ad pixel missing — request blocked]">
+    </span>
+    ← red pixel if the ad request was not blocked; alt text if it was
+  </p>
+
+  <div id="cosmetic-test">COSMETIC BOX VISIBLE (should be hidden in block mode)</div>
+
+  <script>
+    const img = document.getElementById("ad");
+    const note = document.createElement("p");
+    const report = {
+      ts: new Date().toISOString(),
+      src: "s4.html",
+      adLoaded: img.complete && img.naturalWidth > 0
+    };
+    note.textContent = "self-report: ad " + (report.adLoaded ? "LOADED" : "not loaded yet (or blocked)");
+    document.body.appendChild(note);
+    fetch("/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(report)
+    }).catch(() => {});
+  </script>
+</body>
+</html>

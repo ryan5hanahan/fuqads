@@ -1,0 +1,1 @@
+[{"trigger":{"url-filter":"127\\.0\\.0\\.1:8642/ad\\.png","load-type":["image"]},"action":{"type":"block"}},{"trigger":{"if-domain":["127.0.0.1"],"css-selector":"#cosmetic-test"},"action":{"type":"css-display-none"}},{"trigger":{"if-top-url":"127\\.0\\.0\\.1:8642"},"action":{"type":"ignore-previous-rules"}}]

@@ -1,0 +1,9 @@
+.DS_Store
+.build/
+.swiftpm/
+DerivedData/
+*.xcresult
+*.xcodeproj
+spikes/S1-converter/lists/
+spikes/S1-converter/report.md
+xcuserdata/
