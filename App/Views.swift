@@ -56,6 +56,30 @@ struct ContentView: View {
                 }
             }
 
+            Section("User rules") {
+                Text("ABP syntax, one rule per line. `##selector` hides an element, `||host^` blocks a host, `@@` is an exception. `!` comments and blank lines are ignored.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $model.userRulesText)
+                    .font(.system(.callout, design: .monospaced))
+                    .frame(minHeight: 120)
+                HStack {
+                    if model.isSavingUserRules {
+                        ProgressView()
+                        Text("Compiling user rules…").foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Save user rules") { model.saveUserRules() }
+                        .disabled(model.isSavingUserRules)
+                }
+                ForEach(model.userRuleIssues, id: \.line) { issue in
+                    Text("Line \(issue.line): \(issue.text) — \(issue.message)")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                        .textSelection(.enabled)
+                }
+            }
+
             Section("Update") {
                 HStack {
                     if model.isUpdating {

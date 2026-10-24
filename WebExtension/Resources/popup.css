@@ -153,4 +153,17 @@ footer {
   border-radius: 6px;
   cursor: pointer;
 }
+.pick {
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 10px;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pick:hover { background: var(--row-hover); }
+.pick:disabled { opacity: 0.5; cursor: default; }
 .primary:disabled { opacity: 0.5; cursor: default; }

@@ -25,6 +25,11 @@ import SafariServices
 ///     the raw host is returned for unkeyable hosts (IPs, localhost).
 ///     The popup uses this to key per-site state (FR-10).
 ///     Responds synchronously.
+///   { "type": "saveUserRule", "host": "example.com",
+///     "selector": ".ad-box > img" }
+///     Element picker save (FR-22): persists `site##selector` (eTLD+1-
+///     scoped) in `userRules` if not already present, then recompiles
+///     ONLY the User shard (SPEC §4.3, < 1 s). Async; respond immediately.
 ///   { "type": "getState" }      policy, list info, and update state;
 ///     respond synchronously.
 ///
@@ -84,6 +89,29 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         case "etldPlusOne":
             let host = (message?["host"] as? String) ?? ""
             Self.respond(context, ["ok": true, "etldPlusOne": eTLDPlusOne(host) ?? host])
+
+        case "saveUserRule":
+            guard
+                let host = message?["host"] as? String,
+                let selector = (message?["selector"] as? String),
+                !selector.isEmpty
+            else {
+                Self.respond(context, ["ok": false, "error": "bad saveUserRule payload"])
+                return
+            }
+            // `site##selector` scoped to the eTLD+1 (SPEC §4.3, FR-22).
+            // Synchronous persist; the User-shard recompile is async.
+            let site = eTLDPlusOne(host) ?? host
+            let rule = site + "##" + selector
+            let added = !Self.store.userRuleLines.contains(rule)
+            if added {
+                let current = Self.store.userRules
+                Self.store.userRules = current.isEmpty ? rule : current + "\n" + rule
+                Task {
+                    await Self.engine.refreshUserRules()
+                }
+            }
+            Self.respond(context, ["ok": true, "added": added, "async": added])
 
         case "getState":
             Self.respond(context, Self.statePayload())

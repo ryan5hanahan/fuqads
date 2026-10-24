@@ -208,6 +208,34 @@ async function observeAllTabs() {
   }
 }
 
+// Wait until no content-blocker recompile is in progress (SPEC §5.3).
+// dNR changes are immediate; the picker's User-shard recompile takes at
+// most a couple of seconds.
+async function waitIdle() {
+  let saw = false;
+  for (let i = 0; i < 24; i++) {
+    await new Promise((r) => setTimeout(r, 400));
+    const st = await state();
+    if (!st) break;
+    if (st.updateInProgress) saw = true;
+    else if (saw) break;
+  }
+  return saw;
+}
+
+// Element picker save (FR-22): persist `site##selector` natively, wait for
+// the User-shard recompile, then reload the tab so the element is hidden
+// by the real rule.
+async function saveUserRule(host, selector, tabId) {
+  try {
+    await native({ type: "saveUserRule", host, selector });
+    await waitIdle();
+    await browser.tabs.reload(tabId);
+  } catch (e) {
+    console.warn("bl0cksh1t: saveUserRule failed", e);
+  }
+}
+
 // --- wiring --------------------------------------------------------------
 
 browser.alarms.onAlarm.addListener((alarm) => {
@@ -229,6 +257,14 @@ browser.runtime.onMessage.addListener((msg, sender) => {
       // Content-script push (load + debounced DOM mutation): used to keep
       // the observed-origins set current.
       if (msg.topOrigin) observeUrl(msg.topOrigin).catch(() => {});
+      return Promise.resolve({ ok: true });
+    case "pickerResult":
+      // Element picker confirmed: persist the user rule, wait for the
+      // User-shard recompile, reload the tab (FR-22).
+      if (msg.selector && msg.host) {
+        const tabId = sender && sender.tab && sender.tab.id;
+        if (tabId != null) saveUserRule(msg.host, msg.selector, tabId);
+      }
       return Promise.resolve({ ok: true });
   }
   return;

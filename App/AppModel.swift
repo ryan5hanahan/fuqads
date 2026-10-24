@@ -14,6 +14,9 @@ final class AppModel: ObservableObject {
     @Published var extensionStates: [String: Bool] = [:] // bundleID -> enabled
     @Published private(set) var isUpdating = false
     @Published var errorMessage: String?
+    @Published var userRulesText: String = ""
+    @Published var userRuleIssues: [UserRuleDiagnostic] = []
+    @Published private(set) var isSavingUserRules = false
 
     let store: Store
     let engine: UpdateEngine
@@ -40,6 +43,12 @@ final class AppModel: ObservableObject {
     func refresh() {
         listInfos = store.lists.values.sorted { $0.name < $1.name }
         updateState = engine.state
+        // The picker (Safari) can change the rules while the app is
+        // unfocused; pick them up. Unsaved editor edits are re-synced from
+        // the store in v1.
+        if !isSavingUserRules {
+            userRulesText = store.userRules
+        }
     }
 
     func refreshExtensionStates() {
@@ -79,6 +88,32 @@ final class AppModel: ObservableObject {
     func setUpdateInterval(_ hours: Double) {
         store.updateIntervalHours = hours
         refresh()
+    }
+
+    /// User-rules editor (FR-30/FR-31): persist the text, report per-line
+    /// conversion problems, then recompile ONLY the User shard (fast path).
+    func saveUserRules() {
+        guard !isSavingUserRules else { return }
+        isSavingUserRules = true
+        userRuleIssues = []
+        errorMessage = nil
+        Task {
+            store.userRules = userRulesText
+            // Per-line check off the main actor (NFR-4): the converter is
+            // fast for a small list, but this is a user-visible action.
+            let lines = store.userRuleLines
+            let compiler = engine.compiler
+            let diags = await Task.detached {
+                compiler.userRuleDiagnostics(lines)
+            }.value
+            userRuleIssues = diags.filter { !$0.ok }
+            await engine.refreshUserRules()
+            isSavingUserRules = false
+            refresh()
+            if let error = engine.state.lastError {
+                errorMessage = error
+            }
+        }
     }
 
     /// Auto-update on first foregrounding if the last update is stale

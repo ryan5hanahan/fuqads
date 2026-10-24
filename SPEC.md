@@ -113,7 +113,11 @@ rules (`WebExtension/Resources/policy.js`, pure + node-tested):
 - List-derived element hiding → `css-display-none` rules in the CB shards
   (converter handles it).
 - Element picker (content script) → CSS selector → `##` rule in user rules →
-  ContentBlocker-User recompiled (small list, fast).
+  ContentBlocker-User recompiled (small list, fast). Picker UX: hover
+  highlight, click → hide preview + confirm bar (Esc cancels). Selector
+  strategy: `#id` if present, else a `tag.class` chain disambiguated with
+  `:nth-child`. Saved rules are scoped to the page's eTLD+1
+  (`site.com##selector`), so they never leak to other sites.
 - Generic hiding fallback in content script: none in v1 (non-goal).
 
 ### 4.4 Toolbar panel
@@ -252,3 +256,24 @@ extension builds clean; the behavioural matrix needs a signed Safari run:
    LOADED again, the other still BLOCKED (FR-13).
 7. Quit Safari, relaunch → states and allowances still applied (persistence
    via the App Group).
+
+### Phase 3 verification (manual, 2026-10-23)
+
+Picker + user-rule diagnostics logic is covered by stubbed-DOM node
+harnesses and XCTest (`testCompileUserShard*`,
+`testUserRuleDiagnosticsReportsPerLine`); the picker's end-to-end path
+needs Safari:
+
+1. Open `http://127.0.0.1:8000/ads.html` (or any http page) with bl0cksh1t
+   enabled.
+2. Toolbar panel → **Pick element** → hover the green cosmetic box (or any
+   element) → click → it disappears (preview) → confirm bar → **Save** →
+   the tab auto-reloads and the element stays hidden (the saved
+   `127.0.0.1##…` / site-scoped rule is now in the User shard). The rule
+   shows in the app's User rules editor.
+3. Pick the same element again → saving is a no-op (rule already present).
+4. App → User rules: add an invalid line (e.g. a bare `##`) and save →
+   the line is listed with its number and reason (FR-31); valid lines and
+   `##+js(…)` scriptlets are labelled "advanced — not applied in v1".
+5. Set the site to **Trusted** → reload → picked element visible again
+   (allowlist rules sit after the user rules in the User shard).
