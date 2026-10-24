@@ -17,6 +17,24 @@ public struct ListStats: Codable, Sendable, Equatable {
     public init() {}
 }
 
+/// Per-line check of one user rule for the editor (FR-31).
+public struct UserRuleDiagnostic: Sendable, Equatable {
+    /// 1-based position in the input array (comments/blanks excluded by
+    /// `Store.userRuleLines` before the call).
+    public var line: Int
+    public var text: String
+    public var ok: Bool
+    /// Empty when `ok`.
+    public var message: String
+
+    public init(line: Int, text: String, ok: Bool, message: String) {
+        self.line = line
+        self.text = text
+        self.ok = ok
+        self.message = message
+    }
+}
+
 /// One compiled shard: ready-to-write blockerList.json + bookkeeping.
 public struct CompiledShard: Sendable {
     public let shard: Shard
@@ -136,6 +154,52 @@ public final class Compiler: Sendable {
             )
         }
         return output
+    }
+
+    /// Fast path (SPEC §4.3, PLAN Phase 3.2): compile ONLY the user rules
+    /// into the User shard with the allowlist appended. No list fetch or
+    /// conversion — the picker/editor path must stay well under a second.
+    public func compileUserShard(userRules: [String], allowlist: [String]) -> CompiledShard {
+        compileShard(
+            .user,
+            lists: [],
+            perListArrays: [:],
+            allowlist: allowlist,
+            userRules: userRules.isEmpty ? nil : userRules,
+            stats: [:]
+        )
+    }
+
+    /// Per-line conversion check for the user-rules editor (FR-31): each
+    /// line is converted on its own so the UI can report the offending
+    /// line number instead of a bulk unsupported count.
+    public func userRuleDiagnostics(_ lines: [String]) -> [UserRuleDiagnostic] {
+        lines.enumerated().map { index, line in
+            let result = ContentBlockerConverter().convertArray(
+                rules: [line],
+                safariVersion: safariVersion,
+                advancedBlocking: true,
+                maxJsonSizeBytes: nil,
+                progress: nil
+            )
+            if result.safariRulesCount > 0 {
+                return UserRuleDiagnostic(line: index + 1, text: line, ok: true, message: "")
+            }
+            if result.advancedRulesCount > 0 {
+                // Scriptlets / extended CSS: interpreted by the web
+                // extension upstream, not applied by v1 (SPEC §3).
+                return UserRuleDiagnostic(
+                    line: index + 1, text: line, ok: false,
+                    message: "advanced rule (scriptlet/extended CSS) — not applied in v1"
+                )
+            }
+            if result.errorsCount > 0 {
+                return UserRuleDiagnostic(line: index + 1, text: line, ok: false,
+                                           message: "could not be converted")
+            }
+            return UserRuleDiagnostic(line: index + 1, text: line, ok: false,
+                                       message: "produced no rule")
+        }
     }
 
     private func compileShard(

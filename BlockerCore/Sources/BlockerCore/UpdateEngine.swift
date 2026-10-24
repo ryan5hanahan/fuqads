@@ -191,6 +191,33 @@ public final class UpdateEngine: @unchecked Sendable {
         setInProgress(false, error: nil)
     }
 
+    /// User-rules-only recompile (SPEC §4.3): convert the (small) user
+    /// rules, append the allowlist, write and reload ONLY the User shard.
+    /// No downloads, no list conversion — well under a second.
+    public func refreshUserRules() async {
+        setInProgress(true, error: nil)
+        do {
+            let allowlist = Self.trustedSites(store: store)
+            let compiled = compiler.compileUserShard(
+                userRules: store.userRuleLines,
+                allowlist: allowlist
+            )
+            let locations = RulesWriter.write(
+                shard: .user,
+                json: compiled.json,
+                fromBundleURL: fromBundleURL
+            )
+            if locations == 0 {
+                throw UpdateEngineError.writeFailed(.user)
+            }
+            mergeShardCounts(["user": compiled.ruleCount])
+            Reloader.reload([.user], completion: { _ in })
+            setInProgress(false, error: nil)
+        } catch {
+            setInProgress(false, error: "\(error)")
+        }
+    }
+
     // MARK: - helpers
 
     /// Trusted sites (state == .trusted) become allowlist entries (FR-11).

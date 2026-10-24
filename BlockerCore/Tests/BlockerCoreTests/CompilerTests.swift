@@ -126,6 +126,52 @@ final class CompilerTests: XCTestCase {
         XCTAssertTrue(shard.droppedLists.isEmpty)
     }
 
+    // MARK: user-shard fast path + diagnostics (Phase 3)
+
+    func testCompileUserShardIsUserRulesPlusAllowlist() {
+        let shard = Compiler().compileUserShard(
+            userRules: ["example.com##.ad-box", "||tracker.example^"],
+            allowlist: ["trusted.com"]
+        )
+        XCTAssertEqual(shard.shard, .user)
+        let rules = parsedRules(shard)
+        // 1 ignore-previous-rules per allowlisted site, appended last.
+        XCTAssertEqual(rules.count, 3)
+        let last = rules.last!
+        XCTAssertEqual((last["action"] as? [String: Any])?["type"] as? String,
+                       "ignore-previous-rules")
+        XCTAssertTrue(rules.contains {
+            (($0["action"] as? [String: Any])?["type"] as? String) == "css-display-none"
+        })
+    }
+
+    func testCompileUserShardEmptyYieldsPlaceholder() {
+        let shard = Compiler().compileUserShard(userRules: [], allowlist: [])
+        let rules = parsedRules(shard)
+        XCTAssertEqual(rules.count, 1)
+        XCTAssertEqual((rules[0]["action"] as? [String: Any])?["type"] as? String,
+                       "ignore-previous-rules")
+    }
+
+    func testUserRuleDiagnosticsReportsPerLine() {
+        let lines = [
+            "example.com##.ad-box",       // ok: css-display-none
+            "||tracker.example^",          // ok: network block
+            "##+js(abort-current)",        // advanced — not applied in v1
+            "##",                          // unconvertible (empty selector)
+        ]
+        let diags = Compiler().userRuleDiagnostics(lines)
+        XCTAssertEqual(diags.count, 4)
+        XCTAssertEqual(diags.map(\.line), [1, 2, 3, 4])
+        XCTAssertTrue(diags[0].ok)
+        XCTAssertTrue(diags[1].ok)
+        XCTAssertFalse(diags[2].ok)
+        XCTAssertTrue(diags[2].message.contains("advanced"), diags[2].message)
+        XCTAssertFalse(diags[3].ok)
+        XCTAssertFalse(diags[3].message.contains("advanced"), diags[3].message)
+        XCTAssertTrue(diags[0].message.isEmpty)
+    }
+
     // MARK: helpers
 
     func testParseRuleLinesDropsCommentsAndBlanks() {
